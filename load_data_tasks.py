@@ -1,0 +1,240 @@
+from torchvision import transforms
+from avalanche.benchmarks.classic import SplitCIFAR10, SplitCIFAR100, SplitMNIST
+from hyper_parameters import Hyperparameters
+from utils import optimize_device_for_pytorch, set_reproducibility_seeds
+from avalanche.benchmarks.datasets.dataset_utils import default_dataset_location
+from torch.utils.data import DataLoader, random_split
+
+def load_data_cifar10_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, num_workers=Hyperparameters.NUM_WORKERS, n_experiences=5):
+    device = optimize_device_for_pytorch()
+
+    # Set random seeds for reproducibility
+    set_reproducibility_seeds(Hyperparameters.SEED)
+
+    # Define transformations for training and evaluation
+    transform_train = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, padding=4),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
+    ])
+
+    # Define dataset root
+    datadir = default_dataset_location('cifar10')
+
+    # Create SplitCIFAR10 benchmark
+    benchmark = SplitCIFAR10(
+        n_experiences=n_experiences,
+        dataset_root=datadir,
+        return_task_id=True,
+        shuffle=True,
+        seed=Hyperparameters.SEED,
+        train_transform=transform_train,
+        eval_transform=transform_test
+    )
+
+    # Pin memory for CUDA
+    use_pin_memory = device.type == 'cuda'
+
+    # Create train datasets for each experience
+    train_loaders = []
+    test_loaders = []
+    task_classes = []  # Store classes for each task
+    total_classes = 0
+
+    for exp in benchmark.train_stream:
+        # Get the training dataset for this experience
+        train_dataset = exp.dataset
+
+        # Store the classes for this experience
+        if exp.classes_in_this_experience is not None:
+            task_classes.append(sorted(list(exp.classes_in_this_experience)))
+            total_classes += len(exp.classes_in_this_experience)
+
+        # Create data loaders for training
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+
+        train_loaders.append(train_loader)
+
+    # Create test data loaders for each task
+    for exp in benchmark.test_stream:
+        test_loader = DataLoader(
+            exp.dataset, #type: ignore
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+        test_loaders.append(test_loader)
+
+    return train_loaders, test_loaders, total_classes, task_classes
+
+
+def load_data_cifar100_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, num_workers=Hyperparameters.NUM_WORKERS, n_experiences=5):
+    device = optimize_device_for_pytorch()
+
+    # Set random seeds for reproducibility
+    set_reproducibility_seeds(Hyperparameters.SEED)
+
+    # Define transformations for training and evaluation
+    transform_train = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, padding=4),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
+    ])
+
+    # Define dataset root
+    datadir = default_dataset_location('cifar100')
+
+    # Create SplitCIFAR100 benchmark
+    benchmark = SplitCIFAR100(
+        n_experiences=n_experiences,
+        dataset_root=datadir,
+        return_task_id=True,
+        shuffle=True,
+        seed=Hyperparameters.SEED,  
+        train_transform=transform_train,
+        eval_transform=transform_test
+    )
+
+    # Pin memory for CUDA
+    use_pin_memory = device.type == 'cuda'
+
+    # Create validation datasets for each experience
+    train_loaders = []
+    test_loaders = []
+    task_classes = []  # Store classes for each task
+    total_classes = 0
+
+    for exp in benchmark.train_stream:
+        # Get the training dataset for this experience
+        train_dataset = exp.dataset
+
+        # Store the classes for this experience
+        if exp.classes_in_this_experience is not None:
+            task_classes.append(sorted(list(exp.classes_in_this_experience)))
+            total_classes += len(exp.classes_in_this_experience)
+
+        # Create data loaders for training
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+
+        train_loaders.append(train_loader)
+
+    # Create test data loaders for each task
+    for exp in benchmark.test_stream:
+        test_loader = DataLoader(
+            exp.dataset, #type: ignore
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+        test_loaders.append(test_loader)
+
+    return train_loaders, test_loaders, total_classes, task_classes
+
+
+def load_data_split_mnist_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, num_workers=Hyperparameters.NUM_WORKERS, n_experiences=5):
+    device = optimize_device_for_pytorch()
+
+    # Set random seeds for reproducibility
+    set_reproducibility_seeds(Hyperparameters.SEED)
+
+    # Define transformations for training and evaluation
+    transform_train = transforms.Compose([
+        transforms.RandomHorizontalFlip(),  
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    
+    # Define dataset root
+    datadir = default_dataset_location('mnist')
+
+    # Create SplitMNIST benchmark
+    benchmark = SplitMNIST(
+        n_experiences=n_experiences,
+        dataset_root=datadir,
+        return_task_id=True,
+        shuffle=True,
+        seed=Hyperparameters.SEED,
+        train_transform=transform_train,
+        eval_transform=transform_test
+    )
+
+    # Pin memory for CUDA
+    use_pin_memory = device.type == 'cuda'
+
+    # Create validation datasets for each experience
+    train_loaders = []
+    test_loaders = []
+    task_classes = []  # Store classes for each task
+    total_classes = 0
+
+    for exp in benchmark.train_stream:
+        # Get the training dataset for this experience
+        train_dataset = exp.dataset
+
+        # Store the classes for this experience
+        if exp.classes_in_this_experience is not None:
+            task_classes.append(sorted(list(exp.classes_in_this_experience)))
+            total_classes += len(exp.classes_in_this_experience)
+
+        # Create data loaders for training
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+
+        train_loaders.append(train_loader)
+
+    # Create test data loaders for each task
+    for exp in benchmark.test_stream:
+        test_loader = DataLoader(
+            exp.dataset, #type: ignore
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
+            pin_memory=use_pin_memory
+        )
+        test_loaders.append(test_loader)
+
+    return train_loaders, test_loaders, total_classes, task_classes
