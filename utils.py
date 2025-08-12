@@ -5,6 +5,7 @@ from logger import logger
 import numpy as np
 import random
 import torch.nn.functional as F
+import torch.nn as nn
 
 def set_reproducibility_seeds(seed=42):
     # Set Python's built-in random seed
@@ -82,59 +83,27 @@ def clear_mps_cache(device, verbose=False):
             logger.info("MPS cache cleared and garbage collection performed")
 
 
-#Continual learning metrics and utils
-class ContinualLearningMetrics:
+class MatryoshkaLoss(nn.Module):
+    """
+    Calculates the total loss for a Matryoshka-style model.
+    It takes a list of predictions (one for each head) and computes the
+    sum of their individual losses against the same target.
+    """
     def __init__(self):
-        self.task_accuracies = []
+        super(MatryoshkaLoss, self).__init__()
+        self.base_criterion = nn.CrossEntropyLoss()
 
-    def update_task_accuracies(self, task_id, accuracy):
-        self.task_accuracies.append((task_id, accuracy))
-
-    def get_final_average_accuracy(self):
-        # Get the number of tasks
-        num_tasks = len(set(task_id for task_id, _ in self.task_accuracies))
+    def forward(self, mrl_outputs, targets):
+        """
+        Args:
+            mrl_outputs (list of Tensors): The list of output logits from each MRL head.
+            targets (Tensor): The ground truth labels.
         
-        # Create the accuracy matrix
-        accuracy_matrix = np.zeros((num_tasks, num_tasks))
+        Returns:
+            Tensor: The total, aggregated loss.
+        """
+        total_loss = 0.0
+        for output in mrl_outputs:
+            total_loss += self.base_criterion(output, targets)
         
-        # Fill the accuracy matrix
-        for task_id, accuracy in self.task_accuracies:
-            # Assuming task_id starts from 0
-            accuracy_matrix[task_id, task_id] = accuracy
-            
-            # For tasks after the current task, we can fill with the latest accuracy
-            for future_task in range(task_id + 1, num_tasks):
-                accuracy_matrix[future_task, task_id] = accuracy
-                
-        # Calculate average accuracy across all tasks
-        avg_accuracy = np.mean([accuracy_matrix[i,i] for i in range(num_tasks)])
-        
-        return avg_accuracy
-
-    def get_final_average_forgetting(self):
-        # Get the number of tasks
-        num_tasks = len(set(task_id for task_id, _ in self.task_accuracies))
-        
-        if num_tasks <= 1:
-            return 0.0
-            
-        # Create accuracy matrix
-        accuracy_matrix = np.zeros((num_tasks, num_tasks))
-        
-        # Fill the accuracy matrix
-        for task_id, accuracy in self.task_accuracies:
-            accuracy_matrix[task_id, task_id] = accuracy
-            for future_task in range(task_id + 1, num_tasks):
-                accuracy_matrix[future_task, task_id] = accuracy
-                
-        # Calculate forgetting for each task
-        forgetting = []
-        for task in range(num_tasks - 1):  # Exclude last task
-            max_acc = max(accuracy_matrix[i, task] for i in range(task, num_tasks))
-            final_acc = accuracy_matrix[num_tasks-1, task]
-            forgetting.append(max_acc - final_acc)
-            
-        # Return average forgetting
-        return np.mean(forgetting) if forgetting else 0.0
-    
-    
+        return total_loss

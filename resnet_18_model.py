@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18, ResNet18_Weights
 
-# ### NEW: Placeholder for ResNet18_CIFAR to show modifications ###
 # In your actual project, you would modify your src/resnet_18_model.py file
 class ResNet18_CIFAR(nn.Module):
     # This is a standard ResNet18 implementation.
@@ -22,9 +21,31 @@ class ResNet18_CIFAR(nn.Module):
         # The final fully connected layer
         self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
     
-    def forward(self, x):
+    def forward(self, x, get_embedding=False):
         """Forward pass through the ResNet18 model"""
-        return self.resnet(x)
+        if get_embedding:
+            # Return embeddings before the final classification layer
+            x = self.resnet.conv1(x)
+            x = self.resnet.bn1(x)
+            x = self.resnet.relu(x)
+            # Note: maxpool is Identity for CIFAR, so we skip it
+            x = self.resnet.layer1(x)
+            x = self.resnet.layer2(x)
+            x = self.resnet.layer3(x)
+            x = self.resnet.layer4(x)
+            x = self.resnet.avgpool(x)
+            x = torch.flatten(x, 1)
+            return x
+        else:
+            return self.resnet(x)
+        
+    def get_embedding(self, x):
+        """Get embeddings before the final classification layer"""
+        return self.forward(x, get_embedding=True)
+    
+    def get_features(self, x):
+        """Get features (embeddings) for TPG compatibility"""
+        return self.get_embedding(x)
         
     # Expose the fc layer for easy access during replay
     @property
