@@ -1,18 +1,21 @@
 from torchvision import transforms
 from avalanche.benchmarks.classic import SplitCIFAR10, SplitCIFAR100, SplitMNIST
-from hyper_parameters import Hyperparameters
 from utils import optimize_device_for_pytorch, set_reproducibility_seeds
 from avalanche.benchmarks.datasets.dataset_utils import default_dataset_location
 from torch.utils.data import DataLoader
 
-def load_data_cifar10_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experiences=5, return_datasets=False):
+SEED = 42
+
+def load_data_cifar10_by_tasks(batch_size=32, n_experiences=5, return_datasets=False):
     device = optimize_device_for_pytorch()
 
     # Set random seeds for reproducibility
-    set_reproducibility_seeds(Hyperparameters.SEED)
+    set_reproducibility_seeds(SEED)
 
     # Define transformations for training and evaluation
     transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),  # Add random crop with padding
+        transforms.RandomHorizontalFlip(),      # Add random horizontal flip
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
     ])
@@ -31,7 +34,7 @@ def load_data_cifar10_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experien
         dataset_root=datadir,
         return_task_id=True,
         shuffle=True,
-        seed=Hyperparameters.SEED,
+        seed=SEED,
         train_transform=transform_train,
         eval_transform=transform_test
     )
@@ -92,14 +95,16 @@ def load_data_cifar10_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experien
         return train_loaders, test_loaders, total_classes, task_classes
 
 
-def load_data_cifar100_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experiences=10, return_datasets=False):
+def load_data_cifar100_by_tasks(batch_size=32, n_experiences=10, return_datasets=False):
     device = optimize_device_for_pytorch()
 
     # Set random seeds for reproducibility
-    set_reproducibility_seeds(Hyperparameters.SEED)
+    set_reproducibility_seeds(SEED)
 
     # Define transformations for training and evaluation
     transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),  # Add random crop with padding
+        transforms.RandomHorizontalFlip(),      # Add random horizontal flip
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
     ])
@@ -118,7 +123,7 @@ def load_data_cifar100_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experie
         dataset_root=datadir,
         return_task_id=True,
         shuffle=True,
-        seed=Hyperparameters.SEED,  
+        seed=SEED,  
         train_transform=transform_train,
         eval_transform=transform_test
     )
@@ -179,20 +184,16 @@ def load_data_cifar100_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experie
         return train_loaders, test_loaders, total_classes, task_classes
 
 
-def load_data_split_mnist_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_experiences=5, return_datasets=False):
+def load_data_split_mnist_by_tasks(batch_size=32, n_experiences=5, return_datasets=False):
     device = optimize_device_for_pytorch()
 
     # Set random seeds for reproducibility
-    set_reproducibility_seeds(Hyperparameters.SEED)
+    set_reproducibility_seeds(SEED)
 
     # Define transformations for training and evaluation
-    transform_train = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
+    transform = transforms.Compose([
+        # Repeat the single channel 3 times
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1)), 
         transforms.Normalize((0.1307,), (0.3081,))
     ])
     
@@ -205,9 +206,9 @@ def load_data_split_mnist_by_tasks(batch_size=Hyperparameters.BATCH_SIZE, n_expe
         dataset_root=datadir,
         return_task_id=True,
         shuffle=True,
-        seed=Hyperparameters.SEED,
-        train_transform=transform_train,
-        eval_transform=transform_test
+        seed=SEED,
+        train_transform=transform,
+        eval_transform=transform
     )
 
     # Pin memory for CUDA
